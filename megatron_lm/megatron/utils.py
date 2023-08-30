@@ -41,14 +41,11 @@ def reduce_losses(losses):
 def report_memory(name):
     """Simple GPU memory report."""
     mega_bytes = 1024.0 * 1024.0
-    string = name + ' memory (MB)'
-    string += ' | allocated: {}'.format(
-        torch.cuda.memory_allocated() / mega_bytes)
-    string += ' | max allocated: {}'.format(
-        torch.cuda.max_memory_allocated() / mega_bytes)
-    string += ' | reserved: {}'.format(torch.cuda.memory_reserved() / mega_bytes)
-    string += ' | max reserved: {}'.format(
-        torch.cuda.max_memory_reserved() / mega_bytes)
+    string = f'{name} memory (MB)'
+    string += f' | allocated: {torch.cuda.memory_allocated() / mega_bytes}'
+    string += f' | max allocated: {torch.cuda.max_memory_allocated() / mega_bytes}'
+    string += f' | reserved: {torch.cuda.memory_reserved() / mega_bytes}'
+    string += f' | max reserved: {torch.cuda.max_memory_reserved() / mega_bytes}'
     print_rank_0(string)
 
 
@@ -126,10 +123,7 @@ def get_ltor_masks_and_position_ids(data,
     batch_size, seq_length = data.size()
 
     # Attention mask (lower triangular).
-    if reset_attention_mask:
-        att_mask_batch = batch_size
-    else:
-        att_mask_batch = 1
+    att_mask_batch = batch_size if reset_attention_mask else 1
     attention_mask = torch.tril(torch.ones(
         (att_mask_batch, seq_length, seq_length), device=data.device)).view(
             att_mask_batch, 1, seq_length, seq_length)
@@ -179,9 +173,14 @@ def get_ltor_masks_and_position_ids(data,
 def get_parameters_in_billions(model):
     gpus_per_model = torch.distributed.get_world_size(group=mpu.get_model_parallel_group())
 
-    approx_parameters_in_billions = sum([p.ds_numel if hasattr(p,'ds_id') else p.numel() for p in model.parameters()]) * gpus_per_model / 1000000000.0
-
-    return approx_parameters_in_billions
+    return (
+        sum(
+            p.ds_numel if hasattr(p, 'ds_id') else p.numel()
+            for p in model.parameters()
+        )
+        * gpus_per_model
+        / 1000000000.0
+    )
 
 
 def flops_calculator(model, args, iteration_time):

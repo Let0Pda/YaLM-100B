@@ -58,8 +58,9 @@ class ConcatDataset(data.Dataset):
         super(ConcatDataset, self).__init__()
         assert len(datasets) > 0, 'datasets should not be an empty iterable'
         self.datasets = list(datasets)
-        self.is_lazy = sum([isinstance(ds, lazy_array_loader)
-                            for ds in self.datasets]) == len(self.datasets)
+        self.is_lazy = sum(
+            isinstance(ds, lazy_array_loader) for ds in self.datasets
+        ) == len(self.datasets)
         self.cumulative_sizes = self.cumsum(self.datasets)
         self._X = None
         self._Y = None
@@ -87,11 +88,10 @@ class ConcatDataset(data.Dataset):
     def lens(self):
         if self._lens is None:
             self._lens = []
-            if self.is_lazy:
-                for data in self.datasets:
+            for data in self.datasets:
+                if self.is_lazy:
                     self._lens.extend(data.lens)
-            else:
-                for data in self.datasets:
+                else:
                     self._lens.extend([len(d['text']) if isinstance(
                         d, dict) else len(d) for d in data])
         return self._lens
@@ -241,10 +241,7 @@ class csv_dataset(data.Dataset):
         self.Y = []
         try:
             cols = [text_key]
-            if isinstance(label_key, list):
-                cols += label_key
-            else:
-                cols += [label_key]
+            cols += label_key if isinstance(label_key, list) else [label_key]
             data = pd.read_csv(self.path, sep=self.delim, usecols=cols, encoding='latin-1')
         except BaseException:
             data = pd.read_csv(self.path, sep=self.delim, usecols=[text_key], encoding='latin-1')
@@ -274,9 +271,7 @@ class csv_dataset(data.Dataset):
 
     @property
     def tokenizer(self):
-        if self.using_tokenizer:
-            return self._tokenizer
-        return None
+        return self._tokenizer if self.using_tokenizer else None
 
     def __len__(self):
         return len(self.X)
@@ -371,9 +366,7 @@ class json_dataset(data.Dataset):
 
     @property
     def tokenizer(self):
-        if self.using_tokenizer:
-            return self._tokenizer
-        return None
+        return self._tokenizer if self.using_tokenizer else None
 
     def __getitem__(self, index):
         """gets the index'th string from the dataset"""
@@ -445,7 +438,7 @@ class json_dataset(data.Dataset):
                     write_string += json.dumps(j)
                     f.write(write_string)
         else:
-            jsons = [j for j in json_stream]
+            jsons = list(json_stream)
             json.dump(jsons, open(save_path, 'w'), separators=(',', ':'))
 
     def load_json_stream(self, load_path):
@@ -503,11 +496,10 @@ class GPT2Dataset(data.Dataset):
             self.weighting = None
 
     def get_weighted_samples(self, np_rng):
-        if self.weighting is not None:
-            idx = np_rng.randint(self.total_len)
-            return bisect_right(self.weighting, idx)
-        else:
+        if self.weighting is None:
             return np_rng.randint(self.ds_len)
+        idx = np_rng.randint(self.total_len)
+        return bisect_right(self.weighting, idx)
 
     def __len__(self):
         return self.num_samples
@@ -534,7 +526,7 @@ class GPT2Dataset(data.Dataset):
             if self.sentence_start:
                 token_copy = list(tokens)
                 not_done = True
-                while (len(token_copy) > 0) and not_done:
+                while token_copy and not_done:
                     tok = token_copy.pop(0)
                     if self.contains_sentence_end(tok):
                         tokens = token_copy
@@ -562,8 +554,7 @@ class GPT2Dataset(data.Dataset):
         # tokenize
         tokenization = self.tokenizer.EncodeAsIds(data)
         tokenization.append(self.tokenizer.get_command('eos'))
-        tokens = tokenization.tokenization
-        return tokens
+        return tokenization.tokenization
 
     def pad_seq(self, seq):
         total_tokens = self.max_seq_len + 1
@@ -575,11 +566,7 @@ class GPT2Dataset(data.Dataset):
         tok = self.tokenizer.IdToToken(tok)
         if '.' in tok:
             return True
-        if '?' in tok:
-            return True
-        if '!' in tok:
-            return True
-        return False
+        return True if '?' in tok else '!' in tok
 
 
 class bert_sentencepair_dataset(data.Dataset):
@@ -630,11 +617,10 @@ class bert_sentencepair_dataset(data.Dataset):
             self.weighting = None
 
     def get_weighted_samples(self, np_rng):
-        if self.weighting is not None:
-            idx = np_rng.randint(self.total_len)
-            return bisect_right(self.weighting, idx)
-        else:
+        if self.weighting is None:
             return np_rng.randint(self.ds_len)
+        idx = np_rng.randint(self.total_len)
+        return bisect_right(self.weighting, idx)
 
     def __len__(self):
         return self.dataset_size
@@ -665,16 +651,14 @@ class bert_sentencepair_dataset(data.Dataset):
         # join sentence pair, mask, and pad
         tokens, mask, mask_labels, pad_mask = self.create_masked_lm_predictions(
             tokensa, tokensb, self.mask_lm_prob, self.max_preds_per_seq, self.vocab_words, rng)
-        sample = {
-            'text': np.array(
-                tokens[0]),
-            'types': np.array(
-                tokens[1]),
+        return {
+            'text': np.array(tokens[0]),
+            'types': np.array(tokens[1]),
             'is_random': int(is_random_next),
             'mask': np.array(mask),
             'mask_labels': np.array(mask_labels),
-            'pad_mask': np.array(pad_mask)}
-        return sample
+            'pad_mask': np.array(pad_mask),
+        }
 
     def sentence_split(self, document):
         """split document into sentences"""
@@ -690,7 +674,7 @@ class bert_sentencepair_dataset(data.Dataset):
     def sentence_tokenize(self, sent, sentence_num=0, beginning=False, ending=False):
         """tokenize sentence and get token types"""
         tokens = self.tokenizer.EncodeAsIds(sent).tokenization
-        str_type = 'str' + str(sentence_num)
+        str_type = f'str{str(sentence_num)}'
         token_types = [self.tokenizer.get_type(str_type).Id] * len(tokens)
         return tokens, token_types
 
@@ -738,10 +722,7 @@ class bert_sentencepair_dataset(data.Dataset):
                 random_start_a = (random_start_a + 1)
 
         if curr_strs:
-            num_a = 1
-            if len(curr_strs) >= 2:
-                num_a = rng.randint(0, len(curr_strs))
-
+            num_a = rng.randint(0, len(curr_strs)) if len(curr_strs) >= 2 else 1
             tokens_a = []
             token_types_a = []
             for j in range(num_a):
@@ -828,11 +809,7 @@ class bert_sentencepair_dataset(data.Dataset):
         if rng.random() < 0.8:
             new_label = self.tokenizer.get_command('MASK').Id
         else:
-            if rng.random() < 0.5:
-                new_label = label
-            else:
-                new_label = rng.choice(vocab_words)
-
+            new_label = label if rng.random() < 0.5 else rng.choice(vocab_words)
         tokens[idx] = new_label
 
         return label

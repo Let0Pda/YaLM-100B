@@ -57,9 +57,7 @@ def make_data_loader(dataset, batch_size, args):
         group=mpu.get_data_parallel_group())
     rank = torch.distributed.get_rank(group=mpu.get_data_parallel_group())
     distributed = world_size > 1
-    drop_last = distributed
-
-    if distributed:
+    if drop_last := distributed:
         batch_sampler = data_utils.samplers.DistributedBatchSampler(sampler,
                                                                     batch_size,
                                                                     drop_last,
@@ -70,12 +68,12 @@ def make_data_loader(dataset, batch_size, args):
                                                       batch_size,
                                                       drop_last)
 
-    data_loader = torch.utils.data.DataLoader(dataset,
-                                              batch_sampler=batch_sampler,
-                                              num_workers=args.num_workers,
-                                              pin_memory=True)
-
-    return data_loader
+    return torch.utils.data.DataLoader(
+        dataset,
+        batch_sampler=batch_sampler,
+        num_workers=args.num_workers,
+        pin_memory=True,
+    )
 
 
 def make_tfrecord_loaders(args):

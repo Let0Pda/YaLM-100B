@@ -24,10 +24,7 @@ from megatron import mpu
 
 
 def to_python_float(t):
-    if hasattr(t, 'item'):
-        return t.item()
-    else:
-        return t[0]
+    return t.item() if hasattr(t, 'item') else t[0]
 
 
 class LossScaler:
@@ -50,7 +47,7 @@ class LossScaler:
         return False
 
     # `x` is a torch.Tensor
-    def _has_inf_or_nan(x):
+    def _has_inf_or_nan(self):
         return False
 
     def update_scale(self, overflow):
@@ -118,11 +115,10 @@ class DynamicLossScaler:
 
     # `params` is a list / generator of torch.Variable
     def has_overflow_serial(self, params):
-        for p in params:
-            if p.grad is not None and DynamicLossScaler._has_inf_or_nan(p.grad.data):
-                return True
-
-        return False
+        return any(
+            p.grad is not None and DynamicLossScaler._has_inf_or_nan(p.grad.data)
+            for p in params
+        )
 
     def has_overflow(self, params):
         overflow = self.has_overflow_serial(params)
@@ -137,14 +133,14 @@ class DynamicLossScaler:
 
     # `x` is a torch.Tensor
 
-    def _has_inf_or_nan(x):
+    def _has_inf_or_nan(self):
         try:
             # if x is half, the .float() incurs an additional deep copy, but it's necessary if
             # Pytorch's .sum() creates a one-element tensor of the same type as x
             # (which is true for some recent version of pytorch).
-            cpu_sum = float(x.float().sum())
-            # More efficient version that can be used if .sum() returns a Python scalar
-            # cpu_sum = float(x.sum())
+            cpu_sum = float(self.float().sum())
+                # More efficient version that can be used if .sum() returns a Python scalar
+                # cpu_sum = float(x.sum())
         except RuntimeError as instance:
             # We want to check if inst is actually an overflow exception.
             # RuntimeError could come from a different error.
@@ -153,9 +149,11 @@ class DynamicLossScaler:
                 raise
             return True
         else:
-            if cpu_sum == float('inf') or cpu_sum == -float('inf') or cpu_sum != cpu_sum:
-                return True
-            return False
+            return (
+                cpu_sum == float('inf')
+                or cpu_sum == -float('inf')
+                or cpu_sum != cpu_sum
+            )
 
     # `overflow` is boolean indicating whether the gradient overflowed
     def update_scale(self, overflow):

@@ -166,11 +166,10 @@ def model_grads_to_master_grads(model_params, master_params, flat_master=False):
             _flatten_dense_tensors([p.grad.data for p in model_params]))
     else:
         for model, master in zip(model_params, master_params):
-            if model.grad is not None:
-                if master.grad is None:
-                    master.grad = Variable(master.data.new(*master.data.size()))
-            else:
+            if model.grad is None:
                 master.grad = None
+            elif master.grad is None:
+                master.grad = Variable(master.data.new(*master.data.size()))
         model_grads = [p.grad for p in model_params if p.grad is not None]
         master_grads = [p.grad for p in master_params if p.grad is not None]
         _overflow_buf = torch.cuda.IntTensor([0])
@@ -200,10 +199,7 @@ def master_params_to_model_params(model_params, master_params, flat_master=False
 
 
 def to_python_float(t):
-    if hasattr(t, 'item'):
-        return t.item()
-    else:
-        return t[0]
+    return t.item() if hasattr(t, 'item') else t[0]
 
 
 TORCH_MAJOR = int(torch.__version__.split('.')[0])

@@ -54,9 +54,7 @@ class AllgatherFromDataParallelRegion(torch.autograd.Function):
         tensor_list[rank] = input_
         torch.distributed.all_gather(tensor_list, input_, group=group)
 
-        output = torch.cat(tensor_list, dim=0).contiguous()
-
-        return output
+        return torch.cat(tensor_list, dim=0).contiguous()
 
 
     @staticmethod
@@ -67,9 +65,7 @@ class AllgatherFromDataParallelRegion(torch.autograd.Function):
         dim_size = grad_output.shape[0] // world_size
         output_list = torch.split(grad_output, dim_size, dim=0)
 
-        # get chunk from this rank
-        output = output_list[rank].contiguous()
-        return output
+        return output_list[rank].contiguous()
 
 
 def forward_step(data_iterator, model):
@@ -98,7 +94,15 @@ def forward_step(data_iterator, model):
     sorted_vals, sorted_indices = torch.topk(softmaxed, k=softmaxed.shape[1], sorted=True)
 
     def topk_accuracy(k):
-        return torch.cuda.FloatTensor([sum([int(i in sorted_indices[i, :k]) for i in range(global_batch_size)]) / global_batch_size])
+        return torch.cuda.FloatTensor(
+            [
+                sum(
+                    int(i in sorted_indices[i, :k])
+                    for i in range(global_batch_size)
+                )
+                / global_batch_size
+            ]
+        )
 
     topk_accs = [topk_accuracy(int(k)) for k in args.report_topk_accuracies]
     retrieval_loss = torch.nn.CrossEntropyLoss()(retrieval_scores, torch.arange(global_batch_size).long().cuda())

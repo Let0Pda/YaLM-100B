@@ -57,7 +57,7 @@ def accuracy_func_provider(single_dataset_provider):
             else:
                 correct_ans, total_count, predictions = output
                 named_predictions.append((name, predictions))
-                names += '_' + name
+                names += f'_{name}'
             correct += correct_ans
             total += total_count
         percent = float(correct) * 100.0 / float(total)
@@ -66,7 +66,7 @@ def accuracy_func_provider(single_dataset_provider):
 
         if output_predictions and torch.distributed.get_rank() == 0:
             assert args.load is not None
-            filename = os.path.join(args.load, names + '.pt')
+            filename = os.path.join(args.load, f'{names}.pt')
             torch.save(named_predictions, filename)
 
     return metrics_func

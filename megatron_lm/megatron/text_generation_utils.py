@@ -94,9 +94,10 @@ def generate_samples_input_from_file(model):
             inputs = [json.loads(line) for line in fin]
         input_size[0] = len(inputs)
         if args.sample_output_file is None:
-            sample_output_file = args.sample_input_file + ".out"
-            print('could not find `sample-output-file`, setting '
-                  'it to {}'.format(sample_output_file))
+            sample_output_file = f"{args.sample_input_file}.out"
+            print(
+                f'could not find `sample-output-file`, setting it to {sample_output_file}'
+            )
         else:
             sample_output_file = args.sample_output_file
         output_list = []
@@ -243,8 +244,7 @@ def generate_samples_unconditional(model):
             tokens = tokens[1:length - 1]
             text = tokenizer.detokenize(tokens)
             is_finished = length < args.seq_length - 1
-            datum = {'text': text, 'length': length - 1, 'finished': is_finished}
-            yield datum
+            yield {'text': text, 'length': length - 1, 'finished': is_finished}
             ctr += 1
             if ctr >= num_samples:
                 break
@@ -376,10 +376,9 @@ def sample_sequence_batch(model, context_tokens, context_lengths,
                 log_probs = F.softmax(logits, dim=-1)
                 prev = torch.multinomial(log_probs, num_samples=1).view(-1)
 
-            print_logits = []
-            for p in prev:
-                print_logits.append([logits[i, p].item()
-                                     for i in range(batch_size)])
+            print_logits = [
+                [logits[i, p].item() for i in range(batch_size)] for p in prev
+            ]
             started = context_lengths <= context_length
             tokens[:, context_length] = switch(
                 tokens[:, context_length].view(-1), prev, started)

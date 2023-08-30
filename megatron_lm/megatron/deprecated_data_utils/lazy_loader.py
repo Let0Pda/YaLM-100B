@@ -27,7 +27,7 @@ def get_lazy_path(path):
     """
     Gets directory path where lazy files are stored.
     """
-    return os.path.splitext(path)[0] + '.lazy'
+    return f'{os.path.splitext(path)[0]}.lazy'
 
 
 def exists_lazy(path, data_type='data'):
@@ -37,11 +37,7 @@ def exists_lazy(path, data_type='data'):
     if not os.path.exists(get_lazy_path(path)):
         return False
     contents = os.listdir(get_lazy_path(path))
-    if data_type not in contents:
-        return False
-    if data_type + '.len.pkl' not in contents:
-        return False
-    return True
+    return f'{data_type}.len.pkl' in contents if data_type in contents else False
 
 
 def make_lazy(path, strs, data_type='data'):
@@ -53,7 +49,7 @@ def make_lazy(path, strs, data_type='data'):
     if not os.path.exists(lazypath):
         os.makedirs(lazypath)
     datapath = os.path.join(lazypath, data_type)
-    lenpath = os.path.join(lazypath, data_type + '.len.pkl')
+    lenpath = os.path.join(lazypath, f'{data_type}.len.pkl')
     if not torch.distributed.is_initialized() or torch.distributed.get_rank() == 0:
         with open(datapath, 'wb') as f:
             str_lens = []
@@ -125,7 +121,7 @@ class lazy_array_loader(object):
         self.mem_map = mem_map
         if self.mem_map:
             self.file = mmap.mmap(self.file.fileno(), 0, prot=mmap.PROT_READ)
-        lenpath = os.path.join(lazypath, data_type + '.len.pkl')
+        lenpath = os.path.join(lazypath, f'{data_type}.len.pkl')
         self.lens = pkl.load(open(lenpath, 'rb'))
         self.ends = list(accumulate(self.lens))
         self.dumb_ends = list(self.ends)
@@ -139,10 +135,11 @@ class lazy_array_loader(object):
         logic to set and remove (set to None) tokenizer.
         combines preprocessing/tokenization into one callable.
         """
-        if tokenizer is None:
-            if not hasattr(self, '_tokenizer'):
-                self._tokenizer = tokenizer
-        else:
+        if (
+            tokenizer is None
+            and not hasattr(self, '_tokenizer')
+            or tokenizer is not None
+        ):
             self._tokenizer = tokenizer
         self.map_fn = ProcessorTokenizer(tokenizer, self.process_fn)
 
@@ -154,10 +151,7 @@ class lazy_array_loader(object):
         read file and splice strings based on string ending array `self.ends`
         """
         if not isinstance(index, slice):
-            if index == 0:
-                start = 0
-            else:
-                start = self.ends[index - 1]
+            start = 0 if index == 0 else self.ends[index - 1]
             end = self.ends[index]
             rtn = self.file_read(start, end)
             if self.map_fn is not None:
@@ -173,7 +167,7 @@ class lazy_array_loader(object):
             strings = self.file_read(start, stop)
             rtn = split_strings(strings, start, chr_lens)
             if self.map_fn is not None:
-                return self.map_fn([s for s in rtn])
+                return self.map_fn(list(rtn))
         return rtn
 
     def __len__(self):
@@ -187,11 +181,7 @@ class lazy_array_loader(object):
         # seek to start of file read
         self.file.seek(start)
         # read to end of file if no end point provided
-        if end is None:
-            rtn = self.file.read()
-        # else read amount needed to reach end point
-        else:
-            rtn = self.file.read(end - start)
+        rtn = self.file.read() if end is None else self.file.read(end - start)
         self.read_lock.release()
         # TODO: @raulp figure out mem map byte string bug
         # if mem map'd need to decode byte string to string

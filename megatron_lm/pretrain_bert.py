@@ -33,12 +33,9 @@ def model_provider():
 
     print_rank_0('building BERT model ...')
 
-    model = BertModel(
-        num_tokentypes=2,
-        add_binary_head=True,
-        parallel_output=True)
-
-    return model
+    return BertModel(
+        num_tokentypes=2, add_binary_head=True, parallel_output=True
+    )
 
 
 def get_batch(data_iterator):
@@ -49,10 +46,7 @@ def get_batch(data_iterator):
     datatype = torch.int64
 
     # Broadcast data.
-    if data_iterator is not None:
-        data = next(data_iterator)
-    else:
-        data = None
+    data = next(data_iterator) if data_iterator is not None else None
     data_b = mpu.broadcast_data(keys, data, datatype)
 
     # Unpack.

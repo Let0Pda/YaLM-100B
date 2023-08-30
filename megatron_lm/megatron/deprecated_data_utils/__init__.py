@@ -56,7 +56,7 @@ def get_dataset(path, **kwargs):
     elif ext in ['.csv', '.tsv']:
         text = csv_dataset(path, **kwargs)
     else:
-        raise NotImplementedError('data file type %s is not supported' % (ext))
+        raise NotImplementedError(f'data file type {ext} is not supported')
     return text
 
 
@@ -104,14 +104,12 @@ def make_dataset(path, seq_length, text_key, label_key, lazy=False, process_fn=N
             text = get_dataset(path_, text_key=text_key, label_key=label_key, binarize_sent=binarize_sent,
                                delim=delim, drop_unlabeled=drop_unlabeled, loose_json=loose, preprocess_fn=process_fn)
         return text
+
     # get one or multiple datasets and concatenate
     if isinstance(path, str):
         path = [path]
     datasets = [get_dataset_from_path(p) for p in path]
-    if len(datasets) == 1:
-        ds = datasets[0]
-    else:
-        ds = ConcatDataset(datasets)
+    ds = datasets[0] if len(datasets) == 1 else ConcatDataset(datasets)
     # make tokenizer for dataset
     if tokenizer is None:
         tokenizer = make_tokenizer(tokenizer_type, ds, tokenizer_model_path, vocab_size, model_type,
