@@ -102,21 +102,22 @@ def get_samples_mapping_(indexed_dataset,
 
     # Filename of the index mapping
     indexmap_filename = data_prefix
-    indexmap_filename += '_{}_indexmap'.format(name)
+    indexmap_filename += f'_{name}_indexmap'
     if num_epochs != (np.iinfo(np.int32).max - 1):
-        indexmap_filename += '_{}ep'.format(num_epochs)
+        indexmap_filename += f'_{num_epochs}ep'
     if max_num_samples != (np.iinfo(np.int64).max - 1):
-        indexmap_filename += '_{}mns'.format(max_num_samples)
-    indexmap_filename += '_{}msl'.format(max_seq_length)
+        indexmap_filename += f'_{max_num_samples}mns'
+    indexmap_filename += f'_{max_seq_length}msl'
     indexmap_filename += '_{:0.2f}ssp'.format(short_seq_prob)
-    indexmap_filename += '_{}s'.format(seed)
+    indexmap_filename += f'_{seed}s'
     indexmap_filename += '.npy'
 
     # Build the indexed mapping if not exist.
     if torch.distributed.get_rank() == 0 and \
        not os.path.isfile(indexmap_filename):
-        print(' > WARNING: could not find index map file {}, building '
-              'the indices on rank 0 ...'.format(indexmap_filename))
+        print(
+            f' > WARNING: could not find index map file {indexmap_filename}, building the indices on rank 0 ...'
+        )
 
         # Make sure the types match the helpers input types.
         assert indexed_dataset.doc_idx.dtype == np.int64
@@ -125,8 +126,7 @@ def get_samples_mapping_(indexed_dataset,
         # Build samples mapping
         verbose = torch.distributed.get_rank() == 0
         start_time = time.time()
-        print_rank_0(' > building sapmles index mapping for {} ...'.format(
-            name))
+        print_rank_0(f' > building sapmles index mapping for {name} ...')
         # First compile and then import.
         from megatron.data.dataset_utils import compile_helper
         compile_helper()
@@ -142,8 +142,7 @@ def get_samples_mapping_(indexed_dataset,
             verbose)
         print_rank_0(' > done building sapmles index maping')
         np.save(indexmap_filename, samples_mapping, allow_pickle=True)
-        print_rank_0(' > saved the index mapping in {}'.format(
-            indexmap_filename))
+        print_rank_0(f' > saved the index mapping in {indexmap_filename}')
         # Make sure all the ranks have built the mapping
         print_rank_0(' > elasped time to build and save samples mapping '
                      '(seconds): {:4f}'.format(
@@ -157,14 +156,12 @@ def get_samples_mapping_(indexed_dataset,
         group=mpu.get_data_parallel_group())
 
     # Load indexed dataset.
-    print_rank_0(' > loading indexed mapping from {}'.format(
-        indexmap_filename))
+    print_rank_0(f' > loading indexed mapping from {indexmap_filename}')
     start_time = time.time()
     samples_mapping = np.load(indexmap_filename, allow_pickle=True, mmap_mode='r')
     print_rank_0('    loaded indexed file in {:3.3f} seconds'.format(
         time.time() - start_time))
-    print_rank_0('    total number of samples: {}'.format(
-        samples_mapping.shape[0]))
+    print_rank_0(f'    total number of samples: {samples_mapping.shape[0]}')
 
     return samples_mapping
 
@@ -220,13 +217,13 @@ def build_training_sample(sample,
         = pad_and_convert_to_numpy(tokens, tokentypes, masked_positions,
                                    masked_labels, pad_id, max_seq_length)
 
-    train_sample = {
+    return {
         'text': tokens_np,
         'types': tokentypes_np,
         'labels': labels_np,
         'is_random': int(is_next_random),
         'loss_mask': loss_mask_np,
         'padding_mask': padding_mask_np,
-        'truncated': int(truncated)}
-    return train_sample
+        'truncated': int(truncated),
+    }
 

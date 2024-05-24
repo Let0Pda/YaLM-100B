@@ -36,9 +36,9 @@ def model_provider(ds_init=True):
     """Build the model."""
 
     print_rank_0('building GPT2 model ...')
-    see_memory_usage(f"Before Building Model", force=True)
+    see_memory_usage("Before Building Model", force=True)
     args = get_args()
-    
+
     if ds_init:
         with deepspeed.zero.Init(data_parallel_group=mpu.get_data_parallel_group(),
                                 remote_device=None if args.remote_device=='none' else args.remote_device,
@@ -48,7 +48,7 @@ def model_provider(ds_init=True):
     else:
         model = GPT2Model(num_tokentypes=0, parallel_output=True)
 
-    see_memory_usage(f"After Building Model", force=True)
+    see_memory_usage("After Building Model", force=True)
 
     if mpu.get_data_parallel_rank() == 0:
         billion_params = get_parameters_in_billions(model)
@@ -69,10 +69,7 @@ def get_batch(data_iterator):
     datatype = torch.int64
 
     # Broadcast data.
-    if data_iterator is not None:
-        data = next(data_iterator)
-    else:
-        data = None
+    data = next(data_iterator) if data_iterator is not None else None
     data_b = mpu.broadcast_data(keys, data, datatype)
 
     # Unpack.

@@ -285,18 +285,15 @@ class ParallelSelfAttention(MegatronModule):
 
         checkpoint_version = get_checkpoint_version()
         if checkpoint_version is not None:
-           if checkpoint_version == 0:
-               # [s, b, (3 * np * hn)] --> [s, b, (np * 3 * hn)]
-               mixed_x_layer = self._transpose_last_dim(mixed_x_layer, 3, True)
-           elif checkpoint_version == 1.0:
-               # [s, b, (np * hn * 3)] --> [s, b, (np * 3 * hn)]
-               mixed_x_layer = self._transpose_last_dim(mixed_x_layer, 3, False)
-        else:
-            pass  # already [sq, b, (np * 3 * hn)]
-
+            if checkpoint_version == 0:
+                # [s, b, (3 * np * hn)] --> [s, b, (np * 3 * hn)]
+                mixed_x_layer = self._transpose_last_dim(mixed_x_layer, 3, True)
+            elif checkpoint_version == 1.0:
+                # [s, b, (np * hn * 3)] --> [s, b, (np * 3 * hn)]
+                mixed_x_layer = self._transpose_last_dim(mixed_x_layer, 3, False)
         # [sq, b, (np * 3 * hn)] --> [sq, b, np, 3 * hn]
         new_tensor_shape = mixed_x_layer.size()[:-1] + \
-            (self.num_attention_heads_per_partition,
+                (self.num_attention_heads_per_partition,
              3 * self.hidden_size_per_attention_head)
         mixed_x_layer = mixed_x_layer.view(*new_tensor_shape)
 
@@ -304,7 +301,7 @@ class ParallelSelfAttention(MegatronModule):
         (query_layer,
          key_layer,
          value_layer) = mpu.split_tensor_along_last_dim(mixed_x_layer, 3)
-        
+
         if self.pos_encoding_type == 'rotary':
             context_position = 0 if layer_past is None else layer_past[2]
             query_layer = self.rotary_position_encoding(query_layer, context_position)
@@ -331,13 +328,13 @@ class ParallelSelfAttention(MegatronModule):
         # ===================================
         # Raw attention scores. [b, np, s, s]
         # ===================================
-        
+
         # [b, np, sq, sk]
         output_size = (query_layer.size(1), 
                        query_layer.size(2), 
                        query_layer.size(0), 
                        key_layer.size(0))
-        
+
         # [sq, b, np, hn] -> [sq, b * np, hn]
         query_layer = query_layer.view(output_size[2],
                                        output_size[0] * output_size[1], -1)
@@ -410,11 +407,11 @@ class ParallelSelfAttention(MegatronModule):
         # change view [sk, b * np, hn] 
         value_layer = value_layer.view(value_layer.size(0),
                                        output_size[0] * output_size[1], -1)
-        
+
         # change view [b * np, sq, sk]
         attention_probs = attention_probs.view(output_size[0] * output_size[1],
                                                output_size[2], -1)
-        
+
         # matmul: [b * np, sq, hn]
         context_layer = torch.bmm(attention_probs, value_layer.transpose(0,1))
 
@@ -426,7 +423,7 @@ class ParallelSelfAttention(MegatronModule):
 
         # [sq, b, np, hn] --> [sq, b, hp]
         new_context_layer_shape = context_layer.size()[:-2] + \
-            (self.hidden_size_per_partition,)
+                (self.hidden_size_per_partition,)
         context_layer = context_layer.view(*new_context_layer_shape)
 
 
@@ -632,7 +629,7 @@ class ParallelTransformerLayerPart1(MegatronModule):
         layernorm_output = self.input_layernorm(hidden_states)
         # Self attention.
         attention_output, attention_bias = \
-            self.attention(layernorm_output,
+                self.attention(layernorm_output,
                            attention_mask,
                            layer_past=layer_past,
                            get_key_value=get_key_value)
@@ -640,9 +637,6 @@ class ParallelTransformerLayerPart1(MegatronModule):
         presents = None
         if get_key_value:
             raise NotImplementedError('get_key_value param is not yet supported with split-transformers')
-            attention_output, presents = attention_output
-
-    
         # Residual connection.
         if self.apply_residual_connection_post_layernorm:
             residual = layernorm_output
@@ -788,7 +782,7 @@ class ParallelTransformerLayerPart1(MegatronModule):
         layernorm_output = self.input_layernorm(hidden_states)
         # Self attention.
         attention_output, attention_bias = \
-            self.attention(layernorm_output,
+                self.attention(layernorm_output,
                            attention_mask,
                            layer_past=layer_past,
                            get_key_value=get_key_value)
@@ -796,8 +790,6 @@ class ParallelTransformerLayerPart1(MegatronModule):
         presents = None
         if get_key_value:
             raise NotImplementedError('get_key_value param is not yet supported with split-transformers')
-            attention_output, presents = attention_output
-    
         # Residual connection.
         if self.apply_residual_connection_post_layernorm:
             residual = layernorm_output

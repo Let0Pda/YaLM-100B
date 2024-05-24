@@ -24,8 +24,10 @@ import sys
 # This function is adapted from:
 #   https://github.com/mattilyra/LSH/blob/master/examples/Introduction.ipynb
 def shingles(text, char_ngram=5):
-    return set(text[head:head + char_ngram]
-               for head in range(0, len(text) - char_ngram))
+    return {
+        text[head : head + char_ngram]
+        for head in range(0, len(text) - char_ngram)
+    }
 
 
 # This function is adapted from:
@@ -91,7 +93,7 @@ if __name__ == '__main__':
                                   'seoncds and deduped {} documents ...'.
                                   format(counter, time.time() - start_time,
                                          deduped), flush=True)
-                    if len(remove_urls) > 0:
+                    if remove_urls:
                         myjson = json.dumps({main_url: remove_urls},
                                             ensure_ascii=False)
                         f.write(myjson.encode('utf-8'))

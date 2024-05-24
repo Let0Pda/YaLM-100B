@@ -52,12 +52,7 @@ def get_a_and_b_segments(sample, np_rng):
     # Make sure we always have two sentences.
     assert n_sentences > 1, 'make sure each sample has at least two sentences.'
 
-    # First part:
-    # `a_end` is how many sentences go into the `A`.
-    a_end = 1
-    if n_sentences >= 3:
-        # Note that randin in numpy is exclusive.
-        a_end = np_rng.randint(1, n_sentences)
+    a_end = np_rng.randint(1, n_sentences) if n_sentences >= 3 else 1
     tokens_a = []
     for j in range(a_end):
         tokens_a.extend(sample[j])
@@ -100,11 +95,8 @@ def truncate_segments(tokens_a, tokens_b, len_a, len_b, max_num_tokens, np_rng):
 def create_tokens_and_tokentypes(tokens_a, tokens_b, cls_id, sep_id):
     """Merge segments A and B, add [CLS] and [SEP] and build tokentypes."""
 
-    tokens = []
-    tokentypes = []
-    # [CLS].
-    tokens.append(cls_id)
-    tokentypes.append(0)
+    tokens = [cls_id]
+    tokentypes = [0]
     # Segment A.
     for token in tokens_a:
         tokens.append(token)
@@ -156,7 +148,7 @@ def create_masked_lm_predictions(tokens,
     token_boundary = [0] * len(tokens)
 
     for (i, token) in enumerate(tokens):
-        if token == cls_id or token == sep_id:
+        if token in [cls_id, sep_id]:
             token_boundary[i] = 1
             continue
         # Whole Word Masking means that if we mask all of the wordpieces
@@ -165,8 +157,11 @@ def create_masked_lm_predictions(tokens,
         # Note that Whole Word Masking does *not* change the training code
         # at all -- we still predict each WordPiece independently, softmaxed
         # over the entire vocabulary.
-        if (do_whole_word_mask and len(cand_indexes) >= 1 and
-                not is_start_piece(vocab_id_to_token_dict[token])):
+        if (
+            do_whole_word_mask
+            and cand_indexes
+            and not is_start_piece(vocab_id_to_token_dict[token])
+        ):
             cand_indexes[-1].append(i)
         else:
             cand_indexes.append([i])
@@ -196,9 +191,7 @@ def create_masked_lm_predictions(tokens,
 
     ngram_indexes = []
     for idx in range(len(cand_indexes)):
-        ngram_index = []
-        for n in ngrams:
-            ngram_index.append(cand_indexes[idx:idx + n])
+        ngram_index = [cand_indexes[idx:idx + n] for n in ngrams]
         ngram_indexes.append(ngram_index)
 
     np_rng.shuffle(ngram_indexes)
@@ -248,13 +241,10 @@ def create_masked_lm_predictions(tokens,
             # 80% of the time, replace with [MASK]
             if np_rng.random() < 0.8:
                 masked_token = mask_id
+            elif np_rng.random() < 0.5:
+                masked_token = tokens[index]
             else:
-                # 10% of the time, keep original
-                if np_rng.random() < 0.5:
-                    masked_token = tokens[index]
-                # 10% of the time, replace with random word
-                else:
-                    masked_token = vocab_id_list[np_rng.randint(0, len(vocab_id_list))]
+                masked_token = vocab_id_list[np_rng.randint(0, len(vocab_id_list))]
 
             output_tokens[index] = masked_token
 
@@ -465,10 +455,10 @@ def get_indexed_dataset_(data_prefix, data_impl, skip_warmup):
                  'seconds'.format(time.time() - start_time))
 
     print_rank_0(' > indexed dataset stats:')
-    print_rank_0('    number of documents: {}'.format(
-        indexed_dataset.doc_idx.shape[0] - 1))
-    print_rank_0('    number of sentences: {}'.format(
-        indexed_dataset.sizes.shape[0]))
+    print_rank_0(
+        f'    number of documents: {indexed_dataset.doc_idx.shape[0] - 1}'
+    )
+    print_rank_0(f'    number of sentences: {indexed_dataset.sizes.shape[0]}')
 
     return indexed_dataset
 
@@ -490,9 +480,10 @@ def get_train_valid_test_split_(splits_string, size):
     assert splits_sum > 0.0
     splits = [split / splits_sum for split in splits]
     splits_index = [0]
-    for index, split in enumerate(splits):
-        splits_index.append(splits_index[index] +
-                            int(round(split * float(size))))
+    splits_index.extend(
+        splits_index[index] + int(round(split * float(size)))
+        for index, split in enumerate(splits)
+    )
     diff = splits_index[-1] - size
     for index in range(1, len(splits_index)):
         splits_index[index] -= diff

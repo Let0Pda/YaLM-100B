@@ -24,7 +24,7 @@ args = parser.parse_args()
 def get_lines(filepath):
     lines = []
     with open(filepath, 'r') as f:
-        for i, l in enumerate(f.readlines()):
+        for l in f:
             l = l.strip()
             lines.append(l)
     return lines
@@ -57,21 +57,21 @@ def get_splits(lines, line_counts):
 
 
 def format_mappings(line_idx, file_mappings):
-    lines = []
-    for m, l in zip(file_mappings, line_idx):
-        lines.append(str(m).strip() + '\t' + str(l).strip())
-    return lines
+    return [
+        str(m).strip() + '\t' + str(l).strip()
+        for m, l in zip(file_mappings, line_idx)
+    ]
 
 
 def get_filepaths(filepaths, output_dir):
-    paths = []
     train_path = 'train.json'
     dev_path = 'dev.json'
     test_path = 'test.json'
-    paths.append(os.path.join(output_dir, train_path))
-    paths.append(os.path.join(output_dir, dev_path))
-    paths.append(os.path.join(output_dir, test_path))
-    return paths
+    return [
+        os.path.join(output_dir, train_path),
+        os.path.join(output_dir, dev_path),
+        os.path.join(output_dir, test_path),
+    ]
 
 
 def write_files(lines, mappings, filepaths):
@@ -88,7 +88,7 @@ def write_file(lines, path):
 
 
 def write_mapping_file(m, path):
-    path = path + '.map'
+    path = f'{path}.map'
     m = [get_mapping_header()] + m
     write_file(m, path)
 
@@ -111,9 +111,7 @@ line_counts = [len(l) for l in lines]
 total_lines = sum(line_counts)
 dev_percent = args.test_percent[0]
 dev_lines = math.ceil(dev_percent * total_lines)
-test_percent = 0
-if len(args.test_percent) == 2:
-    test_percent = args.test_percent[1]
+test_percent = args.test_percent[1] if len(args.test_percent) == 2 else 0
 test_lines = math.ceil(test_percent * total_lines)
 train_lines = total_lines - (test_lines + dev_lines)
 normed_lines = [train_lines, dev_lines, test_lines]

@@ -157,8 +157,9 @@ def get_model(model_provider_func):
         model = LocalDDP(model)
         return model
 
-    raise NotImplementedError('Unknown DDP implementation specified: {}. '
-                              'Exiting.'.format(args.DDP_impl))
+    raise NotImplementedError(
+        f'Unknown DDP implementation specified: {args.DDP_impl}. Exiting.'
+    )
 
 
 def get_optimizer(model):
@@ -226,7 +227,7 @@ def get_learning_rate_scheduler(optimizer):
         warmup_iter = args.warmup_iters
     else:
         warmup_iter = args.warmup * num_iters
-    lr_scheduler = AnnealingLR(
+    return AnnealingLR(
         optimizer,
         start_lr=args.lr,
         warmup_iter=warmup_iter,
@@ -235,9 +236,8 @@ def get_learning_rate_scheduler(optimizer):
         last_iter=init_step,
         min_lr=args.min_lr,
         use_checkpoint_lr_scheduler=args.use_checkpoint_lr_scheduler,
-        override_lr_scheduler=args.override_lr_scheduler)
-
-    return lr_scheduler
+        override_lr_scheduler=args.override_lr_scheduler,
+    )
 
 
 def setup_model_and_optimizer(model_provider_func):
@@ -296,13 +296,11 @@ def backward_step(optimizer, model, loss):
         # DeepSpeed backward propagation already addressed all reduce communication.
         # Reset the timer to avoid breaking timer logs below.
         timers('backward-allreduce').reset()
-    else:
-        # All-reduce if needed.
-        if args.DDP_impl == 'local':
-            timers('backward-allreduce').start()
-            model.allreduce_params(reduce_after=False,
-                                   fp32_allreduce=args.fp32_allreduce)
-            timers('backward-allreduce').stop()
+    elif args.DDP_impl == 'local':
+        timers('backward-allreduce').start()
+        model.allreduce_params(reduce_after=False,
+                               fp32_allreduce=args.fp32_allreduce)
+        timers('backward-allreduce').stop()
 
     if not args.deepspeed:
         # Update master gradients.
@@ -314,10 +312,10 @@ def backward_step(optimizer, model, loss):
         # Clipping gradients helps prevent the exploding gradient.
         timers('backward-clip-grad').start()
         if args.clip_grad > 0:
-            if not args.fp16:
-                mpu.clip_grad_norm(model.parameters(), args.clip_grad)
-            else:
+            if args.fp16:
                 optimizer.clip_master_grads(args.clip_grad)
+            else:
+                mpu.clip_grad_norm(model.parameters(), args.clip_grad)
         timers('backward-clip-grad').stop()
 
 
@@ -391,6 +389,7 @@ def training_log(loss_dict, total_loss_dict, learning_rate, iteration,
     def add_to_logging(name):
         if name in timers.timers:
             timers_to_log.append(name)
+
     add_to_logging('forward')
     add_to_logging('backward')
     add_to_logging('backward-backward')
@@ -412,7 +411,7 @@ def training_log(loss_dict, total_loss_dict, learning_rate, iteration,
                 args.curriculum_seqlen, args.tokens)
         for key in loss_dict:
             writer.add_scalar(key, loss_dict[key], iteration)
-            writer.add_scalar(key + '/vs tokens', loss_dict[key], args.tokens)
+            writer.add_scalar(f'{key}/vs tokens', loss_dict[key], args.tokens)
         if args.fp16:
             writer.add_scalar('loss_scale', loss_scale, iteration)
         normalizer = iteration % args.log_interval
@@ -524,8 +523,9 @@ def train(forward_step_func, model, optimizer, lr_scheduler,
             torch.distributed.barrier()
             time_str = datetime.now().strftime('%Y-%m-%d %H:%M:%S')
             rank = torch.distributed.get_rank()
-            print_rank_0('rank: {} | time: {} | exiting the program at '
-                         'iteration {}'.format(rank, time_str, iteration))
+            print_rank_0(
+                f'rank: {rank} | time: {time_str} | exiting the program at iteration {iteration}'
+            )
             sys.exit()
 
     return iteration
@@ -545,8 +545,7 @@ def evaluate(forward_step_func, data_iterator, model, verbose=False):
         while iteration < args.eval_iters:
             iteration += 1
             if verbose and iteration % args.log_interval == 0:
-                print_rank_0('Evaluating iter {}/{}'.format(iteration,
-                                                            args.eval_iters))
+                print_rank_0(f'Evaluating iter {iteration}/{args.eval_iters}')
             # Forward evaluation.
             _, loss_dict = forward_step_func(data_iterator, model)
 
@@ -564,8 +563,8 @@ def evaluate(forward_step_func, data_iterator, model, verbose=False):
     # Move model back to the train mode.
     model.train()
 
-    for key in total_loss_dict:
-        total_loss_dict[key] /= args.eval_iters
+    for value in total_loss_dict.values():
+        value /= args.eval_iters
 
     return total_loss_dict
 
@@ -578,20 +577,20 @@ def evaluate_and_print_results(prefix, forward_step_func,
     args = get_args()
 
     total_loss_dict = evaluate(forward_step_func, data_iterator, model, verbose)
-    string = ' validation loss at {} | '.format(prefix)
+    string = f' validation loss at {prefix} | '
     for key in total_loss_dict:
         string += '{} value: {:.6E} | '.format(key, total_loss_dict[key].item())
         ppl = math.exp(min(20, total_loss_dict[key].item()))
         string += '{} PPL: {:.6E} | '.format(key, ppl)
         if writer and torch.distributed.get_rank() == 0:
-            writer.add_scalar('{} value'.format(key),
-                              total_loss_dict[key].item(),
-                              iteration)
-            writer.add_scalar('{} value/vs tokens'.format(key),
-                              total_loss_dict[key].item(),
-                              args.tokens)
-            writer.add_scalar('{} ppl'.format(key), ppl, iteration)
-            writer.add_scalar('{} ppl/vs tokens'.format(key), ppl, args.tokens)
+            writer.add_scalar(f'{key} value', total_loss_dict[key].item(), iteration)
+            writer.add_scalar(
+                f'{key} value/vs tokens',
+                total_loss_dict[key].item(),
+                args.tokens,
+            )
+            writer.add_scalar(f'{key} ppl', ppl, iteration)
+            writer.add_scalar(f'{key} ppl/vs tokens', ppl, args.tokens)
 
     length = len(string) + 1
     print_rank_0('-' * length)
@@ -621,9 +620,9 @@ def build_train_valid_test_data_iterators(
                                       eval_iters * global_batch_size,
                                       test_iters * global_batch_size]
         print_rank_0(' > datasets target sizes (minimum size):')
-        print_rank_0('    train:      {}'.format(train_val_test_num_samples[0]))
-        print_rank_0('    validation: {}'.format(train_val_test_num_samples[1]))
-        print_rank_0('    test:       {}'.format(train_val_test_num_samples[2]))
+        print_rank_0(f'    train:      {train_val_test_num_samples[0]}')
+        print_rank_0(f'    validation: {train_val_test_num_samples[1]}')
+        print_rank_0(f'    test:       {train_val_test_num_samples[2]}')
 
         # Build the datasets.
         train_ds, valid_ds, test_ds = build_train_valid_test_datasets_provider(
@@ -656,15 +655,17 @@ def build_train_valid_test_data_iterators(
     if train_dataloader is not None:
         train_dataloader.batch_sampler.start_iter = args.iteration % \
             len(train_dataloader)
-        print_rank_0('setting training data start iteration to {}'.
-                     format(train_dataloader.batch_sampler.start_iter))
+        print_rank_0(
+            f'setting training data start iteration to {train_dataloader.batch_sampler.start_iter}'
+        )
     if valid_dataloader is not None:
         start_iter_val = (args.iteration // args.eval_interval) * \
             args.eval_iters
         valid_dataloader.batch_sampler.start_iter = start_iter_val % \
             len(valid_dataloader)
-        print_rank_0('setting validation data start iteration to {}'.
-                     format(valid_dataloader.batch_sampler.start_iter))
+        print_rank_0(
+            f'setting validation data start iteration to {valid_dataloader.batch_sampler.start_iter}'
+        )
 
     # Build iterators.
     if train_dataloader is not None:
@@ -677,9 +678,5 @@ def build_train_valid_test_data_iterators(
     else:
         valid_data_iterator = None
 
-    if test_dataloader is not None:
-        test_data_iterator = iter(test_dataloader)
-    else:
-        test_data_iterator = None
-
+    test_data_iterator = None if test_dataloader is None else iter(test_dataloader)
     return train_data_iterator, valid_data_iterator, test_data_iterator

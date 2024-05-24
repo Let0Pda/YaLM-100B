@@ -27,8 +27,9 @@ sys.path.append("../..")
 def test_boradcast_data(model_parallel_size):
 
     if torch.distributed.get_rank() == 0:
-        print('> testing boradcast_data with model parallel size {} ...'.
-              format(model_parallel_size))
+        print(
+            f'> testing boradcast_data with model parallel size {model_parallel_size} ...'
+        )
 
     mpu.initialize_model_parallel(model_parallel_size)
     torch.manual_seed(1234 + mpu.get_data_parallel_rank())

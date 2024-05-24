@@ -31,8 +31,7 @@ def get_ict_dataset(use_titles=True, query_in_block_prob=1):
         use_titles=use_titles,
         use_one_sent_docs=args.use_one_sent_docs
     )
-    dataset = ICTDataset(**kwargs)
-    return dataset
+    return ICTDataset(**kwargs)
 
 
 class ICTDataset(Dataset):
@@ -96,15 +95,13 @@ class ICTDataset(Dataset):
         block_tokens, block_pad_mask = self.concat_and_pad_tokens(block, title)
         block_data = sample_data.as_array()
 
-        sample = {
+        return {
             'query_tokens': query_tokens,
             'query_pad_mask': query_pad_mask,
             'block_tokens': block_tokens,
             'block_pad_mask': block_pad_mask,
             'block_data': block_data,
         }
-
-        return sample
 
     def get_block(self, start_idx, end_idx, doc_idx):
         """Get the IDs for an evidence block plus the title of the corresponding document"""

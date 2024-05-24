@@ -151,7 +151,7 @@ def _initialize_distributed():
         init_method = 'tcp://'
         master_ip = os.getenv('MASTER_ADDR', 'localhost')
         master_port = os.getenv('MASTER_PORT', '6000')
-        init_method += master_ip + ':' + master_port
+        init_method += f'{master_ip}:{master_port}'
         torch.distributed.init_process_group(
             backend=args.distributed_backend,
             world_size=args.world_size, rank=args.rank,
@@ -171,8 +171,7 @@ def _initialize_distributed():
 
 def _init_autoresume():
     """Set autoresume start time."""
-    autoresume = get_adlr_autoresume()
-    if autoresume:
+    if autoresume := get_adlr_autoresume():
         torch.distributed.barrier()
         autoresume.init()
         torch.distributed.barrier()
@@ -180,21 +179,19 @@ def _init_autoresume():
 
 def _set_random_seed(seed):
     """Set random seed for reproducability."""
-    if seed is not None and seed > 0:
-        random.seed(seed)
-        np.random.seed(seed)
-        torch.manual_seed(seed)
-        if torch.cuda.device_count() > 0:
-            mpu.model_parallel_cuda_manual_seed(seed)
-    else:
-        raise ValueError('Seed ({}) should be a positive integer.'.format(seed))
+    if seed is None or seed <= 0:
+        raise ValueError(f'Seed ({seed}) should be a positive integer.')
+    random.seed(seed)
+    np.random.seed(seed)
+    torch.manual_seed(seed)
+    if torch.cuda.device_count() > 0:
+        mpu.model_parallel_cuda_manual_seed(seed)
 
 
 def _write_args_to_tensorboard():
     """Write arguments to tensorboard."""
     args = get_args()
-    writer = get_tensorboard_writer()
-    if writer:
+    if writer := get_tensorboard_writer():
         for arg in vars(args):
             writer.add_text(arg, str(getattr(args, arg)))
 

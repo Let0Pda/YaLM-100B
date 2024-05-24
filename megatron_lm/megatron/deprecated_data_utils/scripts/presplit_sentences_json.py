@@ -3,6 +3,7 @@ Usage:
 python scripts/presplit_sentences_json.py <original loose json file> <output loose json file>
 """
 
+
 import sys
 import json
 
@@ -17,7 +18,7 @@ line_seperator = "\n"
 
 with open(input_file, 'r') as ifile:
     with open(output_file, "w") as ofile:
-        for doc in ifile.readlines():
+        for doc in ifile:
             parsed = json.loads(doc)
             sent_list = []
             for line in parsed['text'].split('\n'):

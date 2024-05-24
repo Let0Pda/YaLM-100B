@@ -68,9 +68,7 @@ class TFRecordDataLoader(object):
 
     def __iter__(self):
         if self.threaded_dl:
-            data_iter = iter(MultiprocessLoader(self.dataloader, self.num_workers))
-            for item in data_iter:
-                yield item
+            yield from iter(MultiprocessLoader(self.dataloader, self.num_workers))
         else:
             data_iter = iter(self.dataloader)
             for item in data_iter:

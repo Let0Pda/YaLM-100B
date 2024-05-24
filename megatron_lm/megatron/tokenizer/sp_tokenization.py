@@ -21,7 +21,7 @@ class SentencePieceTokenizer:
         self._tokenizer = spm.SentencePieceProcessor(model_file=vocab_file)
         self._vocab_words = self._get_vocab_words()
         self.encoder = {token: idx for idx, token in enumerate(self._vocab_words)}
-        self.decoder = {idx: token for idx, token in enumerate(self._vocab_words)}
+        self.decoder = dict(enumerate(self._vocab_words))
 
         mask_tokens = self.convert_tokens_to_ids([self.MASK_TOKEN])
         assert len(mask_tokens) == 1
@@ -62,8 +62,12 @@ class SentencePieceTokenizer:
 
     def detokenize(self, token_ids):
         tokens = [self.decoder[idx] for idx in token_ids]
-        text = "".join(tokens).replace("\u2581", " ").replace(self.EOS_TOKEN, "").lstrip()
-        return text
+        return (
+            "".join(tokens)
+            .replace("\u2581", " ")
+            .replace(self.EOS_TOKEN, "")
+            .lstrip()
+        )
 
     @property
     def cls(self):

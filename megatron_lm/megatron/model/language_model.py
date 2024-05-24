@@ -173,8 +173,7 @@ class Embedding(MegatronModule):
         if self.tokentype_embeddings is not None:
             raise Exception('tokentype embeddings is already initialized')
         if torch.distributed.get_rank() == 0:
-            print('adding embedding for {} tokentypes'.format(num_tokentypes),
-                  flush=True)
+            print(f'adding embedding for {num_tokentypes} tokentypes', flush=True)
         self.num_tokentypes = num_tokentypes
         self.tokentype_embeddings = torch.nn.Embedding(num_tokentypes,
                                                        self.embedding_size)
@@ -216,16 +215,18 @@ class Embedding(MegatronModule):
                                        keep_vars=False):
         """For easy load."""
 
-        state_dict_ = {}
-        state_dict_[self._word_embeddings_key] \
-            = self.word_embeddings.state_dict(destination, prefix, keep_vars)
+        state_dict_ = {
+            self._word_embeddings_key: self.word_embeddings.state_dict(
+                destination, prefix, keep_vars
+            )
+        }
         if self.pos_encoding_type == 'trainable_absolute':
             state_dict_[self._position_embeddings_key] \
-                = self.position_embeddings.state_dict(
+                    = self.position_embeddings.state_dict(
                     destination, prefix, keep_vars)
         if self.num_tokentypes > 0:
             state_dict_[self._tokentype_embeddings_key] \
-                = self.tokentype_embeddings.state_dict(
+                    = self.tokentype_embeddings.state_dict(
                     destination, prefix, keep_vars)
 
         return state_dict_
@@ -237,24 +238,22 @@ class Embedding(MegatronModule):
         if self._word_embeddings_key in state_dict:
             state_dict_ = state_dict[self._word_embeddings_key]
         else:
-            # for backward compatibility.
-            state_dict_ = {}
-            for key in state_dict.keys():
-                if 'word_embeddings' in key:
-                    state_dict_[key.split('word_embeddings.')[1]] \
-                        = state_dict[key]
+            state_dict_ = {
+                key.split('word_embeddings.')[1]: state_dict[key]
+                for key in state_dict.keys()
+                if 'word_embeddings' in key
+            }
         self.word_embeddings.load_state_dict(state_dict_, strict=strict)
 
         # Position embedding.
         if self._position_embeddings_key in state_dict:
             state_dict_ = state_dict[self._position_embeddings_key]
         else:
-            # for backward compatibility.
-            state_dict_ = {}
-            for key in state_dict.keys():
-                if 'position_embeddings' in key:
-                    state_dict_[key.split('position_embeddings.')[1]] \
-                        = state_dict[key]
+            state_dict_ = {
+                key.split('position_embeddings.')[1]: state_dict[key]
+                for key in state_dict.keys()
+                if 'position_embeddings' in key
+            }
         self.position_embeddings.load_state_dict(state_dict_, strict=strict)
 
         # Tokentype embedding.
@@ -267,7 +266,7 @@ class Embedding(MegatronModule):
                 for key in state_dict.keys():
                     if 'tokentype_embeddings' in key:
                         state_dict_[key.split('tokentype_embeddings.')[1]] \
-                            = state_dict[key]
+                                = state_dict[key]
             if len(state_dict_.keys()) > 0:
                 self.tokentype_embeddings.load_state_dict(state_dict_,
                                                           strict=strict)
@@ -359,10 +358,7 @@ class OutputLayer(MegatronModule):
         output = self.output_layer_norm(output)
         output = [output, self.output_bias]
 
-        if isinstance(input_data, torch.Tensor):
-            return output
-        else:
-            return [output, presents]
+        return output if isinstance(input_data, torch.Tensor) else [output, presents]
 
 
 class TransformerLanguageModel(MegatronModule):
@@ -456,16 +452,17 @@ class TransformerLanguageModel(MegatronModule):
                                        keep_vars=False):
         """For easy load."""
 
-        state_dict_ = {}
-        state_dict_[self._embedding_key] \
-            = self.embedding.state_dict_for_save_checkpoint(
-                destination, prefix, keep_vars)
+        state_dict_ = {
+            self._embedding_key: self.embedding.state_dict_for_save_checkpoint(
+                destination, prefix, keep_vars
+            )
+        }
         state_dict_[self._transformer_key] \
-            = self.transformer.state_dict_for_save_checkpoint(
+                = self.transformer.state_dict_for_save_checkpoint(
                 destination, prefix, keep_vars)
         if self.add_pooler:
             state_dict_[self._pooler_key] \
-                = self.pooler.state_dict_for_save_checkpoint(
+                    = self.pooler.state_dict_for_save_checkpoint(
                     destination, prefix, keep_vars)
 
         return state_dict_
@@ -477,27 +474,27 @@ class TransformerLanguageModel(MegatronModule):
         if self._embedding_key in state_dict:
             state_dict_ = state_dict[self._embedding_key]
         else:
-            # for backward compatibility.
-            state_dict_ = {}
-            for key in state_dict.keys():
-                if '_embeddings' in key:
-                    state_dict_[key] = state_dict[key]
+            state_dict_ = {
+                key: state_dict[key]
+                for key in state_dict.keys()
+                if '_embeddings' in key
+            }
         self.embedding.load_state_dict(state_dict_, strict=strict)
 
         # Transformer.
         if self._transformer_key in state_dict:
             state_dict_ = state_dict[self._transformer_key]
         else:
-            # for backward compatibility.
-            state_dict_ = {}
-            for key in state_dict.keys():
-                if 'transformer.' in key:
-                    state_dict_[key.split('transformer.')[1]] = state_dict[key]
+            state_dict_ = {
+                key.split('transformer.')[1]: state_dict[key]
+                for key in state_dict.keys()
+                if 'transformer.' in key
+            }
         self.transformer.load_state_dict(state_dict_, strict=strict)
 
         # Pooler.
         if self.add_pooler:
             assert 'pooler' in state_dict, \
-                'could not find data for pooler in the checkpoint'
+                    'could not find data for pooler in the checkpoint'
             self.pooler.load_state_dict(state_dict[self._pooler_key],
                                         strict=strict)

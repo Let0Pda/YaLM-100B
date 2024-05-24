@@ -17,8 +17,8 @@ def detach(tensor):
 class BlockData(object):
     """Serializable data structure for holding data for blocks -- embeddings and necessary metadata for REALM"""
     def __init__(self, block_data_path=None, load_from_path=True, rank=None):
-        self.embed_data = dict()
-        self.meta_data = dict()
+        self.embed_data = {}
+        self.meta_data = {}
         if block_data_path is None:
             args = get_args()
             block_data_path = args.block_data_path
@@ -30,7 +30,7 @@ class BlockData(object):
             self.load_from_file()
 
         block_data_name = os.path.splitext(self.block_data_path)[0]
-        self.temp_dir_name = block_data_name + '_tmp'
+        self.temp_dir_name = f'{block_data_name}_tmp'
 
     def state(self):
         return {
@@ -43,7 +43,7 @@ class BlockData(object):
         The metadata ends up getting used, and is also much smaller in dimensionality
         so it isn't really worth clearing.
         """
-        self.embed_data = dict()
+        self.embed_data = {}
 
     def load_from_file(self):
         """Populate members from instance saved to file"""
@@ -77,7 +77,7 @@ class BlockData(object):
             os.makedirs(self.temp_dir_name, exist_ok=True)
 
         # save the data for each shard
-        with open('{}/{}.pkl'.format(self.temp_dir_name, self.rank), 'wb') as data_file:
+        with open(f'{self.temp_dir_name}/{self.rank}.pkl', 'wb') as data_file:
             pickle.dump(self.state(), data_file)
 
     def merge_shards_and_save(self):
@@ -91,7 +91,7 @@ class BlockData(object):
                 seen_own_shard = True
                 continue
 
-            with open('{}/{}'.format(self.temp_dir_name, fname), 'rb') as f:
+            with open(f'{self.temp_dir_name}/{fname}', 'rb') as f:
                 data = pickle.load(f)
                 old_size = len(self.embed_data)
                 shard_size = len(data['embed_data'])
@@ -108,8 +108,10 @@ class BlockData(object):
             pickle.dump(self.state(), final_file)
         shutil.rmtree(self.temp_dir_name, ignore_errors=True)
 
-        print("Finished merging {} shards for a total of {} embeds".format(
-            len(shard_names), len(self.embed_data)), flush=True)
+        print(
+            f"Finished merging {len(shard_names)} shards for a total of {len(self.embed_data)} embeds",
+            flush=True,
+        )
 
 
 class FaissMIPSIndex(object):
@@ -118,7 +120,7 @@ class FaissMIPSIndex(object):
         self.embed_size = embed_size
         self.block_data = block_data
         self.use_gpu = use_gpu
-        self.id_map = dict()
+        self.id_map = {}
 
         self.block_mips_index = None
         self._set_block_index()
@@ -143,7 +145,10 @@ class FaissMIPSIndex(object):
 
             self.block_mips_index = faiss.GpuIndexFlat(res, self.block_mips_index, config)
             if mpu.is_unitialized() or mpu.get_data_parallel_rank() == 0:
-                print(">> Initialized index on GPU {}".format(self.block_mips_index.getDevice()), flush=True)
+                print(
+                    f">> Initialized index on GPU {self.block_mips_index.getDevice()}",
+                    flush=True,
+                )
         else:
             # CPU index supports IDs so wrap with IDMap
             self.block_mips_index = faiss.IndexIDMap(self.block_mips_index)
@@ -201,16 +206,12 @@ class FaissMIPSIndex(object):
         query_embeds = np.float32(detach(query_embeds))
 
         if reconstruct:
-            # get the vectors themselves
-            top_k_block_embeds = self.block_mips_index.search_and_reconstruct(query_embeds, top_k)
-            return top_k_block_embeds
-
-        else:
-            # get distances and indices of closest vectors
-            distances, block_indices = self.block_mips_index.search(query_embeds, top_k)
-            if self.use_gpu:
-                fresh_indices = np.zeros(block_indices.shape)
-                for i, j in itertools.product(block_indices.shape):
-                    fresh_indices[i, j] = self.id_map[block_indices[i, j]]
-                block_indices = fresh_indices
-            return distances, block_indices
+            return self.block_mips_index.search_and_reconstruct(query_embeds, top_k)
+        # get distances and indices of closest vectors
+        distances, block_indices = self.block_mips_index.search(query_embeds, top_k)
+        if self.use_gpu:
+            fresh_indices = np.zeros(block_indices.shape)
+            for i, j in itertools.product(block_indices.shape):
+                fresh_indices[i, j] = self.id_map[block_indices[i, j]]
+            block_indices = fresh_indices
+        return distances, block_indices

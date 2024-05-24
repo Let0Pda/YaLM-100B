@@ -26,8 +26,9 @@ from torch.utils import cpp_extension
 os.environ["TORCH_CUDA_ARCH_LIST"] = ""
 
 def get_cuda_bare_metal_version(cuda_dir):
-    raw_output = subprocess.check_output([cuda_dir + "/bin/nvcc", "-V"],
-                                         universal_newlines=True)
+    raw_output = subprocess.check_output(
+        [f"{cuda_dir}/bin/nvcc", "-V"], universal_newlines=True
+    )
     output = raw_output.split()
     release_idx = output.index("release") + 1
     release = output[release_idx].split(".")
@@ -49,9 +50,7 @@ def load_scaled_upper_triang_masked_softmax_fusion_kernel():
     cc_flag = []
     _, bare_metal_major, _ = get_cuda_bare_metal_version(cpp_extension.CUDA_HOME)
     if int(bare_metal_major) >= 11:
-        cc_flag.append('-gencode')
-        cc_flag.append('arch=compute_80,code=sm_80')
-
+        cc_flag.extend(('-gencode', 'arch=compute_80,code=sm_80'))
     srcpath = pathlib.Path(__file__).parent.absolute()
     buildpath = srcpath / 'build'
 
@@ -77,9 +76,7 @@ def load_scaled_masked_softmax_fusion_kernel():
     cc_flag = []
     _, bare_metal_major, _ = get_cuda_bare_metal_version(cpp_extension.CUDA_HOME)
     if int(bare_metal_major) >= 11:
-        cc_flag.append('-gencode')
-        cc_flag.append('arch=compute_80,code=sm_80')
-
+        cc_flag.extend(('-gencode', 'arch=compute_80,code=sm_80'))
     srcpath = pathlib.Path(__file__).parent.absolute()
     buildpath = srcpath / 'build'
 

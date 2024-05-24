@@ -78,21 +78,14 @@ def parse_args(extra_args_provider=None, defaults={},
         args._intermediate_pad = 0
 
     if args.rank == 0:
-        print('using world size: {} and model-parallel size: {} '.format(
-            args.world_size, args.model_parallel_size))
+        print(
+            f'using world size: {args.world_size} and model-parallel size: {args.model_parallel_size} '
+        )
 
-    # Fp16 loss scaling.
-    args.dynamic_loss_scale = False
-    if args.loss_scale is None:
-        args.dynamic_loss_scale = True
-
-    # Parameters dtype.
-    args.params_dtype = torch.float
-    if args.fp16:
-        args.params_dtype = torch.half
+    args.dynamic_loss_scale = args.loss_scale is None
+    args.params_dtype = torch.half if args.fp16 else torch.float
     if args.rank == 0:
-        print('using {} for parameters ...'.format(args.params_dtype),
-              flush=True)
+        print(f'using {args.params_dtype} for parameters ...', flush=True)
 
 
     # Set input defaults.
@@ -100,15 +93,14 @@ def parse_args(extra_args_provider=None, defaults={},
         # For default to be valid, it should not be provided in the
         # arguments that are passed to the program. We check this by
         # ensuring the arg is set to None.
-        if getattr(args, key) is not None:
-            if args.rank == 0:
-                print('WARNING: overriding default arguments for {key}:{v} \
-                       with {key}:{v2}'.format(key=key, v=defaults[key],
-                                               v2=getattr(args, key)),
-                                               flush=True)
-        else:
+        if getattr(args, key) is None:
             setattr(args, key, defaults[key])
 
+        elif args.rank == 0:
+            print('WARNING: overriding default arguments for {key}:{v} \
+                       with {key}:{v2}'.format(key=key, v=defaults[key],
+                                           v2=getattr(args, key)),
+                                           flush=True)
     # Check required arguments.
     required_args = ['num_layers', 'hidden_size', 'num_attention_heads',
                      'max_position_embeddings']
@@ -159,14 +151,14 @@ def _print_args(args):
         str_list = []
         for arg in vars(args):
             dots = '.' * (32 - len(arg))
-            str_list.append('  {} {} {}'.format(arg, dots, getattr(args, arg)))
+            str_list.append(f'  {arg} {dots} {getattr(args, arg)}')
         for arg in sorted(str_list, key=lambda x: x.lower()):
             print(arg, flush=True)
         print('---------------- end of arguments ----------------', flush=True)
 
 
 def _check_arg_is_not_none(args, arg):
-    assert getattr(args, arg) is not None, '{} argument is None'.format(arg)
+    assert getattr(args, arg) is not None, f'{arg} argument is None'
 
 
 def _add_network_size_args(parser):
